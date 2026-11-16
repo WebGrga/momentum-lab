@@ -81,7 +81,7 @@ function viewToday(){
   if(S.routines.length){ h+=`<h2>Checklists</h2>`;
     S.routines.forEach(r=>{ const it=activeItems(r),done=(r.done&&r.done[todayISO()])||[],n=it.filter(i=>done.includes(i.id)).length;
       h+=`<div class="card" style="padding:11px 14px"><div class="row" style="align-items:center"><b style="cursor:pointer" onclick="App.go('routine','${r.id}')">${esc(r.title)}</b><div class="spacer"></div><span class="muted" style="font-size:12.5px">${n}/${it.length}</span></div><div class="barmini"><div style="width:${it.length?Math.round(n/it.length*100):0}%"></div></div>
-      <details><summary>check off →</summary><div class="list" style="margin-top:8px;border:0">${it.map(i=>checkRow(r.id,i,done.includes(i.id))).join("")||"<span class='muted'>no items</span>"}</div></details></div>`; });
+      <details ${openChecks.has(r.id)?"open":""} ontoggle="checkToggle('${r.id}',this)"><summary>check off →</summary><div class="list" style="margin-top:8px;border:0">${it.map(i=>checkRow(r.id,i,done.includes(i.id),todayISO())).join("")||"<span class='muted'>no items</span>"}</div></details></div>`; });
   }
   h+=`<h2>Experiments</h2>`;
   if(!running.length) h+=`<div class="empty">No running experiments. <a onclick="openNewExperiment()">Start one →</a></div>`;
@@ -157,7 +157,10 @@ function activeItems(r){ return (r.items||[]).filter(i=>i.status!=="drop"); }
 function itemCount(r,id){ let n=0; for(const d in (r.done||{})) if(r.done[d].includes(id))n++; return n; }
 function itemLast(r,id){ let last=null; for(const d in (r.done||{})) if(r.done[d].includes(id)&&(!last||d>last))last=d; return last; }
 function dayCount(r,d){ return (r.done&&r.done[d]||[]).length; }
-function checkRow(rid,it,on){ return `<div class="check ${on?"on":""}"><div class="box" onclick="toggleItem('${rid}','${it.id}')">✓</div><div class="nm" onclick="toggleItem('${rid}','${it.id}')">${esc(it.name)}</div>${it.tag?`<span class="tg">${esc(it.tag)}</span>`:""}</div>`; }
+// Which Today checklists are expanded, so ticking an item (which re-renders) keeps them open.
+const openChecks=new Set();
+function checkToggle(rid,el){ if(el.open)openChecks.add(rid); else openChecks.delete(rid); }
+function checkRow(rid,it,on,day){ const t=`toggleItem('${rid}','${it.id}'${day?`,'${day}'`:""})`; return `<div class="check ${on?"on":""}"><div class="box" onclick="${t}">✓</div><div class="nm" onclick="${t}">${esc(it.name)}</div>${it.tag?`<span class="tg">${esc(it.tag)}</span>`:""}</div>`; }
 function viewRoutines(){
   let h=head("Routines","routines",`<button class="btn primary" onclick="openNewRoutine()">+ New</button>`);
   if(!S.routines.length) return h+`<div class="empty">No routines. Make one and paste your list of items.</div>`;
@@ -191,7 +194,7 @@ function calendarHTML(r){
 }
 function calNav(x){ calM+=x; if(calM<0){calM=11;calY--;} if(calM>11){calM=0;calY++;} render(); }
 function selectDay(iso){ selDate=iso; render(); }
-function toggleItem(rid,id){ const r=routine(rid); r.done=r.done||{}; const a=r.done[selDate]=r.done[selDate]||[]; const i=a.indexOf(id); if(i>=0)a.splice(i,1);else a.push(id); if(!a.length)delete r.done[selDate]; save(); render(); }
+function toggleItem(rid,id,day){ const key=day||selDate||todayISO(); const r=routine(rid); r.done=r.done||{}; const a=r.done[key]=r.done[key]||[]; const i=a.indexOf(id); if(i>=0)a.splice(i,1);else a.push(id); if(!a.length)delete r.done[key]; save(); render(); }
 function setItemStatus(rid,id,v){ routine(rid).items.find(x=>x.id===id).status=v; save(); render(); }
 function setItemNote(rid,id,v){ routine(rid).items.find(x=>x.id===id).note=v; save(); }
 function rmItem(rid,id){ const r=routine(rid); r.items=r.items.filter(x=>x.id!==id); for(const d in r.done)r.done[d]=r.done[d].filter(x=>x!==id); save(); render(); }
@@ -253,7 +256,7 @@ function radarSVG(scores){
   scores.forEach((s,i)=>{ const [x,y]=pt(i,R); g+=`<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="var(--line)"/>`; const [lx,ly]=pt(i,R+22); const an=lx>cx+6?"start":lx<cx-6?"end":"middle"; g+=`<text x="${lx}" y="${ly}" fill="${s.f.color}" font-size="11.5" font-weight="700" text-anchor="${an}" dominant-baseline="middle">${s.f.name}</text>`; });
   g+=`<polygon points="${scores.map((s,i)=>pt(i,R*s.score/100).join(",")).join(" ")}" fill="rgba(212,167,44,.28)" stroke="var(--accent)" stroke-width="2"/>`;
   scores.forEach((s,i)=>{const [x,y]=pt(i,R*s.score/100);g+=`<circle cx="${x}" cy="${y}" r="3.6" fill="${s.f.color}"/>`;});
-  return `<svg viewBox="0 0 380 330" style="max-width:430px;width:100%">${g}</svg>`;
+  return `<svg viewBox="-80 0 540 330" style="max-width:560px;width:100%;overflow:visible">${g}</svg>`;
 }
 function viewBase(){
   const scores=FOUNDATIONS.map(f=>Object.assign({f},foundationScore(f.id)));
@@ -470,7 +473,7 @@ function setCmpA(v){ cmpA=v; render(); }
 function setCmpB(v){ cmpB=v; render(); }
 function setNoteQuery(v){ noteQuery=v; renderNotesOnly(); }
 
-;try{Object.assign(window,{ App, copyIdeas, noteAccToggle, ideaAccToggle, setKTab, setNoteType, setExpTab, setCmpA, setCmpB, setNoteQuery, activeItems, addBulk, addDays, addIdea, addMetricRow, addPred, addProm, attemptClose, calNav, calendarHTML, changeIdeaCat, changeInfo, checkRow, closeModal, compareUI, confirmBox, dayCount, delExperiment, delMedia, delNote, delPred, delProm, delRoutine, dropIdea, esc, expScore, exportData, fchip, fmt, foundationScore, head, helpModal, ideaRow, importData, itemCount, itemLast, kpi, latestValue, lessonsList, load, markDirty, migrate, niceDate, nl, noChangeWeek, notesList, notesRows, numOrNull, openAAR, openBulkItems, openLog, openMedia, openNewExperiment, openNewNote, openNewRoutine, openNoteRead, predLedger, promLedger, promoteIdea, quickAddNote, radarSVG, render, renderMetricList, renderNav, renderNotesOnly, resolvePred, resolveProm, rmItem, rmMetric, routine, save, saveAAR, saveExperiment, saveLog, saveMedia, saveNote, saveRoutine, saveWeek, scoreBadges, seed, selectDay, setItemNote, setItemStatus, showModal, toast, todayISO, toggleItem, uid, viewBase, viewExperiment, viewExperiments, viewIdeas, viewKnowledge, viewLedgers, viewRoutine, viewRoutines, viewSettings, viewToday, viewWeekly, wipe, ymd });}catch(e){}
+;try{Object.assign(window,{ App, checkToggle, copyIdeas, noteAccToggle, ideaAccToggle, setKTab, setNoteType, setExpTab, setCmpA, setCmpB, setNoteQuery, activeItems, addBulk, addDays, addIdea, addMetricRow, addPred, addProm, attemptClose, calNav, calendarHTML, changeIdeaCat, changeInfo, checkRow, closeModal, compareUI, confirmBox, dayCount, delExperiment, delMedia, delNote, delPred, delProm, delRoutine, dropIdea, esc, expScore, exportData, fchip, fmt, foundationScore, head, helpModal, ideaRow, importData, itemCount, itemLast, kpi, latestValue, lessonsList, load, markDirty, migrate, niceDate, nl, noChangeWeek, notesList, notesRows, numOrNull, openAAR, openBulkItems, openLog, openMedia, openNewExperiment, openNewNote, openNewRoutine, openNoteRead, predLedger, promLedger, promoteIdea, quickAddNote, radarSVG, render, renderMetricList, renderNav, renderNotesOnly, resolvePred, resolveProm, rmItem, rmMetric, routine, save, saveAAR, saveExperiment, saveLog, saveMedia, saveNote, saveRoutine, saveWeek, scoreBadges, seed, selectDay, setItemNote, setItemStatus, showModal, toast, todayISO, toggleItem, uid, viewBase, viewExperiment, viewExperiments, viewIdeas, viewKnowledge, viewLedgers, viewRoutine, viewRoutines, viewSettings, viewToday, viewWeekly, wipe, ymd });}catch(e){}
 (async function(){
   try{ if(window.momentumDesk&&window.momentumDesk.load){ const fd=await window.momentumDesk.load(); if(fd&&fd.trim()){ try{ S=migrate(JSON.parse(fd)); localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){} } } }catch(e){}
   save(); render();
