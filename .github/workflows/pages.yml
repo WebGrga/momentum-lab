@@ -29,7 +29,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run build
+      # Absolute base: the app is served through the lab's proxy at /momentum-lab/app/,
+      # with or without the trailing slash. (Not meant to be opened on github.io directly.)
+      - run: npx vite build --base=/momentum-lab/app/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
